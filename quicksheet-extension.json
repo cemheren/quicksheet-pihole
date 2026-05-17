@@ -1,0 +1,10 @@
+{
+  "name": "quicksheet-pihole",
+  "version": "1.0.0",
+  "description": "Pi-hole DNS blocking stats on your wallpaper",
+  "author": "cemheren",
+  "prefix": "pihole:",
+  "entry": "QuickSheetPihole/QuickSheetPihole.csproj",
+  "width": 1,
+  "height": 8
+}
