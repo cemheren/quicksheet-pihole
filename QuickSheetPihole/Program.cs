@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace QuickSheetPihole;
@@ -31,6 +31,8 @@ class Program
                 }
                 else if (type == "activate")
                 {
+                    string id = msg.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? "" : "";
+
                     string param = "";
                     if (msg.TryGetProperty("params", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
                     {
@@ -39,24 +41,11 @@ class Program
                             parts.Add(p.GetString() ?? "");
                         param = string.Join(" ", parts).Trim();
                     }
-                    else if (msg.TryGetProperty("cells", out var cellsEl) && cellsEl.ValueKind == JsonValueKind.Array)
-                    {
-                        var parts = new List<string>();
-                        foreach (var c in cellsEl.EnumerateArray())
-                            if (c.ValueKind == JsonValueKind.Array)
-                                foreach (var v in c.EnumerateArray())
-                                    parts.Add(v.GetString() ?? "");
-                        param = string.Join(" ", parts).Trim();
-                    }
-
-                    int anchorRow = 0, anchorCol = 0;
-                    if (msg.TryGetProperty("row", out var rowEl)) anchorRow = rowEl.GetInt32();
-                    if (msg.TryGetProperty("col", out var colEl)) anchorCol = colEl.GetInt32();
 
                     var (host, token) = ParseParam(param);
                     var stats = await FetchStats(host, token);
                     var rows = RenderRows(host, stats);
-                    WriteOutput(anchorRow, anchorCol, rows);
+                    WriteOutput(id, rows);
                 }
             }
             catch { /* swallow malformed input */ }
@@ -68,7 +57,6 @@ class Program
         if (string.IsNullOrWhiteSpace(param))
             return ("pi.hole", "");
 
-        // Support TOKEN@HOST syntax
         var atIdx = param.LastIndexOf('@');
         if (atIdx > 0)
             return (param[(atIdx + 1)..].Trim(), param[..atIdx].Trim());
@@ -126,18 +114,18 @@ class Program
         if (stats == null)
         {
             rows.Add($"Pi-hole: {host}");
-            rows.Add("⚠ No response");
+            rows.Add("\u26a0 No response");
             return rows;
         }
 
         if (!string.IsNullOrEmpty(stats.Error))
         {
             rows.Add($"Pi-hole: {host}");
-            rows.Add($"⚠ {TruncateRight(stats.Error, 30)}");
+            rows.Add($"\u26a0 {TruncateRight(stats.Error, 30)}");
             return rows;
         }
 
-        var statusIcon = stats.Status?.ToLower() == "enabled" ? "🟢" : "🔴";
+        var statusIcon = stats.Status?.ToLower() == "enabled" ? "\ud83d\udfe2" : "\ud83d\udd34";
         rows.Add($"Pi-hole: {host}");
         rows.Add($"Status:  {statusIcon} {(stats.Status?.ToUpper() ?? "UNKNOWN")}");
         rows.Add($"Blocked: {stats.BlockPercent:F1}%  {BlockBar(stats.BlockPercent)}");
@@ -153,27 +141,21 @@ class Program
     {
         var filled = (int)Math.Round(pct / 100.0 * width);
         filled = Math.Clamp(filled, 0, width);
-        return "[" + new string('█', filled) + new string('░', width - filled) + "]";
+        return "[" + new string('\u2588', filled) + new string('\u2591', width - filled) + "]";
     }
 
     static string TruncateRight(string s, int max) =>
-        s.Length <= max ? s : s[..max] + "…";
+        s.Length <= max ? s : s[..max] + "\u2026";
 
-    static void WriteOutput(int anchorRow, int anchorCol, List<string> rows)
+    static void WriteOutput(string id, List<string> rows)
     {
-        var cells = new StringBuilder();
-        cells.Append('[');
-        bool first = true;
+        var cells = new List<object>();
         for (int i = 0; i < rows.Count; i++)
         {
-            if (!first) cells.Append(',');
-            first = false;
-            var escaped = JsonEncodedText.Encode(rows[i]).ToString();
-            cells.Append($"{{\"r\":{i},\"c\":0,\"v\":\"{escaped}\"}}");
+            cells.Add(new { r = i, c = 0, v = rows[i] });
         }
-        cells.Append(']');
 
-        Console.WriteLine($"{{\"type\":\"write\",\"id\":\"pihole\",\"cells\":{cells}}}");
+        Console.WriteLine(JsonSerializer.Serialize(new { type = "write", id, cells }));
     }
 }
 
