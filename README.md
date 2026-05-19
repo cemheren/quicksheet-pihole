@@ -20,7 +20,7 @@ Domains: 1,512,347 blocked
 ## Install
 
 ```
-ext: github:cemheren/quicksheet-pihole
+ext: github:Deskworks/quicksheet-pihole
 ```
 
 ## Usage
